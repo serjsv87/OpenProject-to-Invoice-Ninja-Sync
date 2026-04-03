@@ -66,4 +66,5 @@ This project is open-source and I welcome any improvements, bug fixes, or sugges
 
 ## 📄 License
 
-MIT License. See `LICENSE` for more details (optional).
+Released under the [MIT License](LICENSE). 
+This project is completely open-source. You are free to use, modify, and distribute it as you see fit. Contributions are highly encouraged!
