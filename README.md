@@ -1,4 +1,4 @@
-# OpenProject to Invoice Ninja Sync
+# <img src="logo.png" width="80" align="right" /> OpenProject to Invoice Ninja Sync
 
 A professional web application designed to automate the generation of invoices in **Invoice Ninja** by synchronizing time-tracking data from **OpenProject**.
 

@@ -30,7 +30,7 @@ class InvoiceNinjaClient:
             "date": issue_date,
             "due_date": due_date,
             "line_items": line_items,
-            "footer": footer,
+            "terms": footer,
             "status_id": 1 # Draft
         }
         response = requests.post(url, headers=self.headers, json=payload)

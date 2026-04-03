@@ -24,9 +24,13 @@ export const Step3Settings = ({ data, onBack, onNext }: { data: any; onBack: () 
 
   useEffect(() => {
     const savedFooter = localStorage.getItem('invoice_footer');
-    if (savedFooter) {
-      setForm((prev: any) => ({ ...prev, footer: savedFooter }));
-    }
+    const lastClientId = localStorage.getItem('last_invoice_ninja_client_id');
+    
+    setForm((prev: any) => ({ 
+      ...prev, 
+      footer: savedFooter || prev.footer,
+      client_id: lastClientId || prev.client_id 
+    }));
   }, []);
 
   const handleNext = () => {
@@ -35,6 +39,7 @@ export const Step3Settings = ({ data, onBack, onNext }: { data: any; onBack: () 
       return;
     }
     localStorage.setItem('invoice_footer', form.footer || '');
+    localStorage.setItem('last_invoice_ninja_client_id', form.client_id);
     onNext(form);
   };
 
@@ -82,7 +87,7 @@ export const Step3Settings = ({ data, onBack, onNext }: { data: any; onBack: () 
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Payment Details / Footer (Saved locally)</label>
+        <label className="text-sm font-medium">Payment Details / Public Notes / Footer (Saved locally)</label>
         <textarea 
           className="w-full h-32 border border-input rounded-md bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="e.g. Bank: XYZ, IBAN: DE123..."
