@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import client from '../../api/client';
-import { Loader2, ArrowLeft, ArrowRight, UserCheck, Calendar } from 'lucide-react';
+import { Loader2, ArrowLeft, ArrowRight, UserCheck, Calendar, Sparkles } from 'lucide-react';
 
 export const Step3Settings = ({ data, onBack, onNext }: { data: any; onBack: () => void; onNext: (settings: any) => void }) => {
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [form, setForm] = useState(data);
+  const [form, setForm] = useState({
+    ai_description: false,
+    ai_improve_title: false,
+    ai_model: 'gemini-3.1-flash-lite-preview',
+    ...data
+  });
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -86,14 +91,47 @@ export const Step3Settings = ({ data, onBack, onNext }: { data: any; onBack: () 
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Payment Details / Public Notes / Footer (Saved locally)</label>
-        <textarea 
-          className="w-full h-32 border border-input rounded-md bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="e.g. Bank: XYZ, IBAN: DE123..."
-          value={form.footer || ''}
-          onChange={(e) => setForm({ ...form, footer: e.target.value })}
-        />
+      <div className="space-y-4 border-t pt-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2 text-primary/80 uppercase tracking-wider">
+            <Sparkles size={16} /> AI Enrichment (Optional)
+          </h3>
+          <select 
+            className="text-xs border rounded-md px-2 py-1 bg-muted/50"
+            value={form.ai_model}
+            onChange={(e) => setForm({ ...form, ai_model: e.target.value })}
+          >
+            <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite (Fastest)</option>
+            <option value="gemini-flash-latest">Gemini Flash (Balanced)</option>
+            <option value="gemini-flash-lite-latest">Gemini Flash Lite (Efficient)</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="flex items-start gap-4 p-3 border rounded-md cursor-pointer hover:bg-muted/30 transition-colors">
+            <input 
+              type="checkbox" 
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-primary"
+              checked={form.ai_description}
+              onChange={(e) => setForm({ ...form, ai_description: e.target.checked })}
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Smart Description</span>
+              <span className="text-xs text-muted-foreground">Generate 1-3 sentences based on task body and recent comments.</span>
+            </div>
+          </label>
+          <label className="flex items-start gap-4 p-3 border rounded-md cursor-pointer hover:bg-muted/30 transition-colors">
+            <input 
+              type="checkbox" 
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-primary"
+              checked={form.ai_improve_title}
+              onChange={(e) => setForm({ ...form, ai_improve_title: e.target.checked })}
+            />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Professional Titles</span>
+              <span className="text-xs text-muted-foreground">AI will refine titles to be more suitable for an official invoice.</span>
+            </div>
+          </label>
+        </div>
       </div>
 
       {error && <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">{error}</div>}

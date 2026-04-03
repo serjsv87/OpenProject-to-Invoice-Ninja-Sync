@@ -8,6 +8,9 @@ from clients.openproject import OpenProjectClient
 from clients.invoiceninja import InvoiceNinjaClient
 from auth import create_access_token, get_current_user, verify_password, get_password_hash, decode_token, SECRET_KEY
 from websocket_manager import manager
+from google import genai
+from google.genai import types
+import json
 
 from typing import List, Optional, Dict
 from pydantic import BaseModel
@@ -29,6 +32,7 @@ class SearchRequest(BaseModel):
     user_id: Optional[int] = None
 
 class LineItem(BaseModel):
+    wp_id: Optional[int] = 0
     product_key: Optional[str] = ""
     notes: str
     quantity: float
@@ -41,6 +45,9 @@ class GenerateRequest(BaseModel):
     due_date: str
     ws_client_id: str
     footer: Optional[str] = ""
+    ai_description: Optional[bool] = False
+    ai_improve_title: Optional[bool] = False
+    ai_model: Optional[str] = "gemini-3.1-flash-lite-preview"
 
 # Setup hardcoded user from ENV
 APP_USER = os.getenv("APP_LOGIN", "admin")
@@ -57,6 +64,12 @@ in_client = InvoiceNinjaClient(
     os.getenv("IN_API_URL"), 
     os.getenv("IN_API_TOKEN")
 )
+
+# Initialize Gemini
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+gen_client = None
+if GEMINI_KEY:
+    gen_client = genai.Client(api_key=GEMINI_KEY)
 
 # Configure CORS
 origins = os.getenv("CORS_ORIGINS", "https://billing.uw-t.com").split(",")
@@ -173,16 +186,124 @@ async def generate_invoice(req: GenerateRequest, current_user: str = Depends(get
         )
         
         litems = []
+        total_items = len(req.line_items)
+        
         for i, item in enumerate(req.line_items):
+            current_progress = 20 + (60 * i / total_items)
+            
+            p_key = item.product_key
+            notes = item.notes
+            
+            # AI Enrichment
+            if GEMINI_KEY and item.wp_id and item.wp_id > 0 and (req.ai_description or req.ai_improve_title):
+                await manager.send_personal_message(
+                    {"status": "processing", "message": f"AI analyzing Task #{item.wp_id}...", "progress": current_progress},
+                    req.ws_client_id
+                )
+                
+                try:
+                    # Fetch extra context
+                    wp_data = op_client.get_work_package(item.wp_id)
+                    activities = op_client.get_work_package_activities(item.wp_id)
+                    
+                    # Metadata for AI
+                    status_name = wp_data.get("_links", {}).get("status", {}).get("title", "Unknown")
+                    priority_name = wp_data.get("_links", {}).get("priority", {}).get("title", "Normal")
+                    type_name = wp_data.get("_links", {}).get("type", {}).get("title", "Task")
+                    
+                    # Last 15 comments with authors
+                    comments = []
+                    for act in activities[-15:]:
+                        comment_text = act.get("comment", {}).get("raw")
+                        if comment_text:
+                            author = act.get("_links", {}).get("author", {}).get("title", "System")
+                            comments.append(f"[{author}]: {comment_text}")
+                    
+                    prompt = f"""
+                    ROLE: Senior Billing & Project Specialist.
+                    TASK: Create professional invoice entries for a high-end agency.
+                    
+                    TASK CONTEXT:
+                    - ID: #{item.wp_id}
+                    - Subject: {wp_data.get('subject')}
+                    - Type: {type_name} | Status: {status_name} | Priority: {priority_name}
+                    - Project Body: {wp_data.get('description', {}).get('raw', 'N/A')}
+                    - Activity Log: {json.dumps(comments, indent=2)}
+                    
+                    GOAL:
+                    1. improved_title: A concise, executive-level title for the service (e.g., "Architecture Design & Consultation" instead of "draw house"). DO NOT include the task ID in this field.
+                    2. professional_description: A 1-3 sentence narrative describing the VALUE delivered. 
+                       - DO NOT repeat the title. 
+                       - Use the activity log to find SPECIFIC accomplishments (e.g., "Resolved critical navigation bugs..." or "Finalized API integration for...").
+                       - If the task is ongoing, frame it as "Progress on..." or "Continued development of...".
+                       - If data is scarce, use your expertise to expand the title into a professional service description.
+                    
+                    OUTPUT: Return ONLY a raw JSON object.
+                    {{
+                        "improved_title": "string",
+                        "professional_description": "string"
+                    }}
+                    """
+                    
+                    # Log for debugging
+                    selected_model = req.ai_model or "gemini-3.1-flash-lite-preview"
+                    print(f"ENRICHING Task #{item.wp_id}: Model={selected_model}, Title={req.ai_improve_title}, Desc={req.ai_description}")
+
+                    if not gen_client:
+                         raise ValueError("Gemini API Client not initialized. Check your GEMINI_API_KEY.")
+
+                    # Configure thinking budget based on model
+                    thinking_config = None
+                    if selected_model == "gemini-3.1-flash-lite-preview":
+                        thinking_config = types.ThinkingConfig(thinking_level="MINIMAL")
+                    elif selected_model == "gemini-flash-latest":
+                        thinking_config = types.ThinkingConfig(thinking_budget=-1)
+                    elif selected_model == "gemini-flash-lite-latest":
+                        thinking_config = types.ThinkingConfig(thinking_budget=0)
+
+                    generate_content_config = types.GenerateContentConfig(
+                        thinking_config=thinking_config
+                    )
+
+                    response = gen_client.models.generate_content(
+                        model=selected_model,
+                        contents=prompt,
+                        config=generate_content_config
+                    )
+                    
+                    # Robust JSON extraction via regex
+                    json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if not json_match:
+                         raise ValueError(f"AI Response did not contain JSON: {response.text}")
+                    
+                    raw_text = json_match.group(0)
+                    print(f"DEBUG: AI Response for #{item.wp_id}: {raw_text}")
+                    ai_data = json.loads(raw_text)
+                    
+                    if req.ai_improve_title:
+                        p_key = f"#{item.wp_id}: {ai_data.get('improved_title', wp_data.get('subject'))}"
+                    
+                    if req.ai_description:
+                        # Ensure we don't fall back to title if AI returned a valid object
+                        ai_desc = ai_data.get('professional_description')
+                        if ai_desc:
+                            notes = ai_desc
+                        
+                except Exception as ai_err:
+                    print(f"AI ERROR for task #{item.wp_id}: {str(ai_err)}")
+                    # Fallback to standard ID prefix if AI fails
+                    if not p_key.startswith('#'):
+                         p_key = f"#{item.wp_id}: {wp_data.get('subject')}"
+
             litems.append({
-                "product_key": item.product_key or item.notes,
-                "notes": item.notes,
+                "product_key": p_key,
+                "notes": notes,
                 "quantity": item.quantity,
                 "cost": item.cost
             })
-            # Progress update per line if needed, or just one big jump
+            
             await manager.send_personal_message(
-                {"status": "processing", "message": f"Processing item {i+1} of {len(req.line_items)}...", "progress": 20 + (50 * (i+1) / len(req.line_items))},
+                {"status": "processing", "message": f"Prepared item {i+1} of {total_items}...", "progress": 20 + (60 * (i+1) / total_items)},
                 req.ws_client_id
             )
 

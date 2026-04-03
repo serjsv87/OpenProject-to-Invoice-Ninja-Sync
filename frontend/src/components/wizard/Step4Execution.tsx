@@ -66,6 +66,9 @@ export const Step4Execution = ({ filters, lineItems, settings, onBack }: { filte
         issue_date: settings.issue_date,
         due_date: settings.due_date,
         footer: settings.footer,
+        ai_description: settings.ai_description,
+        ai_improve_title: settings.ai_improve_title,
+        ai_model: settings.ai_model,
         ws_client_id: wsClientId.current
       });
     } catch (err: any) {

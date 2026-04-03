@@ -92,3 +92,9 @@ class OpenProjectClient:
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         return response.json()
+    def get_work_package_activities(self, wp_id: int) -> List[Dict]:
+        """Fetch activities (comments) for a specific work package."""
+        url = f"{self.api_url}/work_packages/{wp_id}/activities"
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        return response.json().get("_embedded", {}).get("elements", [])

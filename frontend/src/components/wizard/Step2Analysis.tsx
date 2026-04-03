@@ -31,7 +31,8 @@ export const Step2Analysis = ({ analysis, onBack, onNext }: { analysis: any; onB
     const lineItems = Object.entries(analysis)
       .filter(([id]) => selectedTasks[id])
       .map(([id, data]: any) => ({
-        product_key: data.id && data.id !== "0" ? `#${data.id}` : "Project Level",
+        wp_id: data.id && data.id !== "0" ? Number(data.id) : 0,
+        product_key: data.id && data.id !== "0" ? `#${data.id}: ${data.title}` : "Project Level",
         notes: data.title,
         quantity: data.hours,
         cost: globalRate

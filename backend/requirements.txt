@@ -7,3 +7,4 @@ bcrypt
 PyJWT
 python-multipart
 websockets
+google-genai
