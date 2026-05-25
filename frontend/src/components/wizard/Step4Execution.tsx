@@ -35,16 +35,16 @@ export const Step4Execution = ({ filters, lineItems, settings, onBack }: { filte
     };
 
     ws.onopen = () => {
-      if (!mounted.current) return;
+      if (wsRef.current !== ws) return;
       console.log('WS Connected');
       startGeneration();
     };
 
     ws.onerror = () => {
-      if (!mounted.current) return;
+      if (wsRef.current !== ws) return;
       // Small timeout to avoid flicker on quick connection handshake
       setTimeout(() => {
-        if (mounted.current && ws.readyState !== WebSocket.OPEN) {
+        if (wsRef.current === ws && ws.readyState !== WebSocket.OPEN) {
           setError('WebSocket connection error');
           setStatus('error');
         }
@@ -52,7 +52,6 @@ export const Step4Execution = ({ filters, lineItems, settings, onBack }: { filte
     };
 
     return () => {
-      mounted.current = false;
       ws.close();
     };
   }, []);
